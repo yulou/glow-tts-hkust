@@ -16,6 +16,7 @@
 1. Python environment
 
 ![env](images/1.png)
+
 2. Install a version of PyTorch that supports CUDA 12.4
 ```bash
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
