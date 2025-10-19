@@ -1,9 +1,9 @@
 # ARIN5203 Project Glow-tts
 
 # Milestone: Yang Fengshuo
----
+
 ## Update: 2025.10.19
----
+
 ### 1. Reference Documentation
 
 1. [语音识别 课程（中文版）](https://interactiveuandmetutorials.weebly.com/35486388993567221029-3550631243.html)
@@ -14,6 +14,7 @@
 
 (Anaconda Python Environment is recommanded)
 1. Python environment
+
 ![env](images/1.png)
 2. Install a version of PyTorch that supports CUDA 12.4
 ```bash
