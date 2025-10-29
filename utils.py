@@ -13,6 +13,19 @@ MATPLOTLIB_FLAG = False
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging
+def simple_inspect(checkpoint):
+    if isinstance(checkpoint, dict):
+        for key, value in checkpoint.items():
+            if isinstance(value, torch.Tensor):
+                print(f"📊 {key}: Tensor {value.shape} {value.dtype}")
+            elif isinstance(value, dict):
+                print(f"📁 {key}: Dict with {len(value)} keys")
+            elif isinstance(value, list):
+                print(f"📋 {key}: List with {len(value)} items")
+            else:
+                print(f"ℹ️  {key}: {type(value)} = {value}")
+    else:
+        print(f"Root: {type(checkpoint)}")
 
 def load_checkpoint(checkpoint_path, model, optimizer=None):
   assert os.path.isfile(checkpoint_path)
@@ -42,6 +55,9 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     model.load_state_dict(new_state_dict)
   logger.info("Loaded checkpoint '{}' (iteration {})" .format(
     checkpoint_path, iteration))
+  simple_inspect(checkpoint_dict)
+  print(checkpoint_dict.keys())
+  #input()
   return model, optimizer, learning_rate, iteration
 
 
@@ -194,7 +210,7 @@ def get_hparams_from_file(config_path):
 def check_git_hash(model_dir):
   source_dir = os.path.dirname(os.path.realpath(__file__))
   if not os.path.exists(os.path.join(source_dir, ".git")):
-    logger.warn("{} is not a git repository, therefore hash value comparison will be ignored.".format(
+    logger.warning("{} is not a git repository, therefore hash value comparison will be ignored.".format(
       source_dir
     ))
     return
@@ -205,7 +221,7 @@ def check_git_hash(model_dir):
   if os.path.exists(path):
     saved_hash = open(path).read()
     if saved_hash != cur_hash:
-      logger.warn("git hash values are different. {}(saved) != {}(current)".format(
+      logger.warning("git hash values are different. {}(saved) != {}(current)".format(
         saved_hash[:8], cur_hash[:8]))
   else:
     open(path, "w").write(cur_hash)
