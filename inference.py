@@ -26,14 +26,16 @@ import models
 import utils
 
 # load WaveGlow
-'''
+from torch import amp
+
 waveglow_path = './waveglow/waveglow_256channels_ljs_v3.pt' # or change to the latest version of the pretrained WaveGlow.
-waveglow = torch.load(waveglow_path)['model']
+# Add the WaveGlow class to safe globals
+#torch.serialization.add_safe_globals([glow.WaveGlow])
+waveglow = torch.load(waveglow_path, weights_only=False)['model']
 waveglow = waveglow.remove_weightnorm(waveglow)
 _ = waveglow.cuda().eval()
-from apex import amp
-waveglow, _ = amp.initialize(waveglow, [], opt_level="O3") # Try if you want to boost up synthesis speed.
-'''
+
+
 
 
 # In[2]:
@@ -83,8 +85,15 @@ x_tst_lengths = torch.tensor([x_tst.shape[1]]).cuda()
 
 # In[ ]:
 
-
-
+def inference_with_amp(waveglow, input_data):
+    model.eval()
+    with torch.no_grad():
+        with amp.autocast(device_type='cuda'):
+            try:
+                audio = waveglow.infer(input_data.half(), sigma=.666)
+            except:
+                audio = waveglow.infer(input_data, sigma=.666)
+            return audio
 with torch.no_grad():
   noise_scale = .667
   length_scale = 1.0
@@ -95,10 +104,16 @@ with torch.no_grad():
   from PIL import Image
   image = Image.fromarray(spectrogram_data)
   image.save('output.png')
-  #try:
-    #audio = waveglow.infer(y_gen_tst.half(), sigma=.666)
-  #except:
-    #audio = waveglow.infer(y_gen_tst, sigma=.666)
-#ipd.Audio(normalize_audio(audio[0].clamp(-1,1).data.cpu().float().numpy()), rate=hps.data.sampling_rate)
+  audio = inference_with_amp(waveglow, y_gen_tst)
+  print("audio shape {}".format(audio.shape))
+ipd.Audio(normalize_audio(audio[0].clamp(-1,1).data.cpu().float().numpy()), rate=hps.data.sampling_rate)
+
+import scipy.io.wavfile as wavfile
+
+# Assuming audio is your tensor and sampling_rate is known
+audio_np = audio[0].clamp(-1, 1).data.cpu().float().numpy()
+
+# Save as WAV file
+wavfile.write('output.wav', hps.data.sampling_rate, audio_np)
 
 
