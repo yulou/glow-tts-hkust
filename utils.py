@@ -111,8 +111,12 @@ def plot_spectrogram_to_numpy(spectrogram):
   plt.tight_layout()
 
   fig.canvas.draw()
-  data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+  buf = fig.canvas.buffer_rgba()
+  data = np.frombuffer(buf, dtype=np.uint8)
+  w, h = fig.canvas.get_width_height()
+  print("data shape {}".format(data.shape))
+  print("plot_spectrogram_to_numpy w,h {}".format((w,h)))
+  data = data.reshape((w,h,4))[:,:,:3]
   plt.close()
   return data
 

@@ -91,6 +91,10 @@ with torch.no_grad():
   (y_gen_tst, *_), *_, (attn_gen, *_) = model(x_tst, x_tst_lengths, gen=True, noise_scale=noise_scale, length_scale=length_scale)
   print("y_gen_tst shape {}".format(y_gen_tst.shape))
   print("attn_gen shape {}".format(attn_gen.shape))
+  spectrogram_data = utils.plot_spectrogram_to_numpy(y_gen_tst.squeeze(0).data.cpu().numpy())
+  from PIL import Image
+  image = Image.fromarray(spectrogram_data)
+  image.save('output.png')
   #try:
     #audio = waveglow.infer(y_gen_tst.half(), sigma=.666)
   #except:

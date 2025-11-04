@@ -87,11 +87,15 @@ class TextEncoder(nn.Module):
       window_size=window_size,
       block_length=block_length,
     )
-
+    print("TextEncoder prenet bool: {}, gin_channels: {}".format(prenet, gin_channels))
     self.proj_m = nn.Conv1d(hidden_channels, out_channels, 1)
     if not mean_only:
       self.proj_s = nn.Conv1d(hidden_channels, out_channels, 1)
     self.proj_w = DurationPredictor(hidden_channels + gin_channels, filter_channels_dp, kernel_size, p_dropout)
+    print(self.encoder)
+    print(self.proj_m)
+    #print(self.proj_s)
+    print(self.proj_w)
   
   def forward(self, x, x_lengths, g=None):
     x = self.emb(x) * math.sqrt(self.hidden_channels) # [b, t, h]
@@ -146,6 +150,7 @@ class FlowSpecDecoder(nn.Module):
     self.gin_channels = gin_channels
 
     self.flows = nn.ModuleList()
+    # n_blocks refers to the number of normalizing blocks(12)
     for b in range(n_blocks):
       self.flows.append(modules.ActNorm(channels=in_channels * n_sqz))
       self.flows.append(modules.InvConvNear(channels=in_channels * n_sqz, n_split=n_split))
@@ -191,6 +196,8 @@ class FlowGenerator(nn.Module):
       hidden_channels, 
       filter_channels, 
       filter_channels_dp, 
+      # only out_channels is specified during instance creation
+      # n_mel_channels : 80 in base.json
       out_channels,
       kernel_size=3, 
       n_heads=2, 
@@ -257,11 +264,14 @@ class FlowGenerator(nn.Module):
         prenet=prenet,
         gin_channels=gin_channels)
 
+    print("FlowGenerator hidden_channels_dec: {}, hidden_channels: {}".format(hidden_channels_dec, hidden_channels))
     self.decoder = FlowSpecDecoder(
+        # n_mel_channels : 80 in base.json
         out_channels, 
         hidden_channels_dec or hidden_channels, 
         kernel_size_dec, 
-        dilation_rate, 
+        dilation_rate,
+         # n_blocks_dec refers to the number of normalizing blocks 
         n_blocks_dec, 
         n_block_layers, 
         p_dropout=p_dropout_dec, 
@@ -271,15 +281,18 @@ class FlowGenerator(nn.Module):
         gin_channels=gin_channels)
 
     if n_speakers > 1:
+      print("FlowGenerator __init__, n_speaker: {}".format(n_speakers))
       self.emb_g = nn.Embedding(n_speakers, gin_channels)
       nn.init.uniform_(self.emb_g.weight, -0.1, 0.1)
 
   def forward(self, x, x_lengths, y=None, y_lengths=None, g=None, gen=False, noise_scale=1., length_scale=1.):
     if g is not None:
+      print()
       g = F.normalize(self.emb_g(g)).unsqueeze(-1) # [b, h]
     x_m, x_logs, logw, x_mask = self.encoder(x, x_lengths, g=g)
 
     if gen:
+      print("x=>{}, x_len=>{}".format(x, x_lengths))
       w = torch.exp(logw) * x_mask * length_scale
       w_ceil = torch.ceil(w)
       y_lengths = torch.clamp_min(torch.sum(w_ceil, [1, 2]), 1).long()
