@@ -110,7 +110,7 @@ def plot_pitch_tracks_comparison(audio_files, speaker_names):
     # Set figure properties
     plt.xlabel('Time [s]', fontsize=12)
     plt.ylabel('Frequency [Hz]', fontsize=12)
-    plt.title('Pitch tracks of speech samples from different speaker identities', 
+    plt.title('Pitch tracks of test and synthesized samples', 
               fontsize=13, pad=20)
     plt.legend(fontsize=10, frameon=True, loc='upper right')
     plt.grid(True, alpha=0.3, linestyle='-')
@@ -124,14 +124,19 @@ def plot_pitch_tracks_comparison(audio_files, speaker_names):
 
 if __name__ == "__main__":
     # Audio file list
+    '''
     audio_files = [
         "./audio_data/arctic_a0407_slt.wav",  # Female 1
         "./audio_data/arctic_a0407_clb.wav",  # Female 2  
         "./audio_data/arctic_a0407_bdl.wav",   # Male 1
         "./audio_data/arctic_a0407_rms.wav"    # Male 2
     ]
-    
-    speaker_names = ["Female 1", "Female 2", "Male 1", "Male 2"]
+    '''
+    audio_files = [
+        "./test_generated_audio/LJ033-0042.wav",
+        "./test_generated_audio/output.wav",
+    ]
+    speaker_names = ["Ground Truth", "Synthesized"]
     
     # Generate pitch tracks comparison plot
     plot_pitch_tracks_comparison(audio_files, speaker_names)
