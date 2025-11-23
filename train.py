@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import torch.distributed as dist
-from apex.parallel import DistributedDataParallel as DDP
-from apex import amp
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.amp as amp
 
 from data_utils import TextMelLoader, TextMelCollate
 import models
@@ -28,7 +28,7 @@ def main():
 
   n_gpus = torch.cuda.device_count()
   os.environ['MASTER_ADDR'] = 'localhost'
-  os.environ['MASTER_PORT'] = '80000'
+  os.environ['MASTER_PORT'] = '8002'
 
   hps = utils.get_hparams()
   mp.spawn(train_and_eval, nprocs=n_gpus, args=(n_gpus, hps,))
@@ -68,9 +68,9 @@ def train_and_eval(rank, n_gpus, hps):
       out_channels=hps.data.n_mel_channels, 
       **hps.model).cuda(rank)
   optimizer_g = commons.Adam(generator.parameters(), scheduler=hps.train.scheduler, dim_model=hps.model.hidden_channels, warmup_steps=hps.train.warmup_steps, lr=hps.train.learning_rate, betas=hps.train.betas, eps=hps.train.eps)
-  if hps.train.fp16_run:
-    generator, optimizer_g._optim = amp.initialize(generator, optimizer_g._optim, opt_level="O1")
-  generator = DDP(generator)
+  #if hps.train.fp16_run:
+    #generator, optimizer_g._optim = amp.initialize(generator, optimizer_g._optim, opt_level="O1")
+  #generator = DDP(generator)
   epoch_str = 1
   global_step = 0
   try:
@@ -95,7 +95,8 @@ def train_and_eval(rank, n_gpus, hps):
 def train(rank, epoch, hps, generator, optimizer_g, train_loader, logger, writer):
   train_loader.sampler.set_epoch(epoch)
   global global_step
-
+  if hps.train.fp16_run:
+    scaler = torch.amp.GradScaler()
   generator.train()
   for batch_idx, (x, x_lengths, y, y_lengths) in enumerate(train_loader):
     x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(rank, non_blocking=True)
@@ -103,22 +104,36 @@ def train(rank, epoch, hps, generator, optimizer_g, train_loader, logger, writer
 
     # Train Generator
     optimizer_g.zero_grad()
-    
-    (z, z_m, z_logs, logdet, z_mask), (x_m, x_logs, x_mask), (attn, logw, logw_) = generator(x, x_lengths, y, y_lengths, gen=False)
-    l_mle = commons.mle_loss(z, z_m, z_logs, logdet, z_mask)
-    l_length = commons.duration_loss(logw, logw_, x_lengths)
+    if hps.train.fp16_run:
+      with torch.amp.autocast(enabled=hps.train.fp16_run):
+        (z, z_m, z_logs, logdet, z_mask), (x_m, x_logs, x_mask), (attn, logw, logw_) = generator(x, x_lengths, y, y_lengths, gen=False)
+        l_mle = commons.mle_loss(z, z_m, z_logs, logdet, z_mask)
+        l_length = commons.duration_loss(logw, logw_, x_lengths)
 
-    loss_gs = [l_mle, l_length]
-    loss_g = sum(loss_gs)
+        loss_gs = [l_mle, l_length]
+        loss_g = sum(loss_gs)
+    else:
+      (z, z_m, z_logs, logdet, z_mask), (x_m, x_logs, x_mask), (attn, logw, logw_) = generator(x, x_lengths, y, y_lengths, gen=False)
+
+      l_mle = commons.mle_loss(z, z_m, z_logs, logdet, z_mask)
+      l_length = commons.duration_loss(logw, logw_, x_lengths)
+
+      loss_gs = [l_mle, l_length]
+      loss_g = sum(loss_gs)
 
     if hps.train.fp16_run:
-      with amp.scale_loss(loss_g, optimizer_g._optim) as scaled_loss:
-        scaled_loss.backward()
-      grad_norm = commons.clip_grad_value_(amp.master_params(optimizer_g._optim), 5)
+      scaler.scale(loss_g).backward()
+      scaler.unscale_(optimizer_g)
+      grad_norm = commons.clip_grad_value_(generator.parameters(), 5)
     else:
       loss_g.backward()
       grad_norm = commons.clip_grad_value_(generator.parameters(), 5)
-    optimizer_g.step()
+    
+    if hps.train.fp16_run:
+      scaler.step(optimizer_g)
+      scaler.update()
+    else:
+      optimizer_g.step()
     
     if rank==0:
       if batch_idx % hps.train.log_interval == 0:
